@@ -6,6 +6,7 @@ import { beadPalette, type PaletteColor } from './palette'
 type SourceMode = 'photo' | 'pattern'
 type GenerationStrategy = 'accurate' | 'reduced' | 'craft'
 type EditMode = 'inspect' | 'paint' | 'box'
+type PreprocessPreset = 'portrait' | 'landscape' | 'illustration'
 
 type Rgb = {
   r: number
@@ -49,6 +50,22 @@ type PatternSnapshot = {
   cells: Cell[]
 }
 
+type WeightedColor = {
+  color: Rgb
+  weight: number
+}
+
+type Recommendation = {
+  preprocessPreset: PreprocessPreset
+  generationStrategy: GenerationStrategy
+  ditherStrength: number
+  gridSize: number
+  colorLimit: number
+  summary: string
+}
+
+type RecommendationApiResult = Recommendation
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value))
 
@@ -89,6 +106,15 @@ const rgbToLab = ({ r, g, b }: Rgb): Lab => {
     b: 200 * (fy - fz),
   }
 }
+
+const subtractRgb = (left: Rgb, right: Rgb): Rgb => ({
+  r: left.r - right.r,
+  g: left.g - right.g,
+  b: left.b - right.b,
+})
+
+const mixTowards = (value: number, target: number, amount: number) =>
+  value * (1 - amount) + target * amount
 
 const ciede2000 = (left: Lab, right: Lab) => {
   const avgL = (left.l + right.l) / 2
@@ -159,94 +185,6 @@ const ciede2000 = (left: Lab, right: Lab) => {
   return Math.sqrt(lTerm ** 2 + cTerm ** 2 + hTerm ** 2 + rt * cTerm * hTerm)
 }
 
-const averageRgb = (colors: Rgb[]) => {
-  const sum = colors.reduce(
-    (accumulator, color) => ({
-      r: accumulator.r + color.r,
-      g: accumulator.g + color.g,
-      b: accumulator.b + color.b,
-    }),
-    { r: 0, g: 0, b: 0 },
-  )
-
-  return {
-    r: Math.round(sum.r / colors.length),
-    g: Math.round(sum.g / colors.length),
-    b: Math.round(sum.b / colors.length),
-  }
-}
-
-const averageBlock = (
-  imageData: Uint8ClampedArray,
-  imageWidth: number,
-  imageHeight: number,
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-) => {
-  let totalR = 0
-  let totalG = 0
-  let totalB = 0
-  let count = 0
-  const safeEndX = clamp(endX, startX + 1, imageWidth)
-  const safeEndY = clamp(endY, startY + 1, imageHeight)
-
-  for (let y = startY; y < safeEndY; y += 1) {
-    for (let x = startX; x < safeEndX; x += 1) {
-      const index = (y * imageWidth + x) * 4
-      totalR += imageData[index]
-      totalG += imageData[index + 1]
-      totalB += imageData[index + 2]
-      count += 1
-    }
-  }
-
-  return {
-    r: Math.round(totalR / count),
-    g: Math.round(totalG / count),
-    b: Math.round(totalB / count),
-  }
-}
-
-const dominantBlockColor = (
-  imageData: Uint8ClampedArray,
-  imageWidth: number,
-  imageHeight: number,
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-) => {
-  const safeEndX = clamp(endX, startX + 1, imageWidth)
-  const safeEndY = clamp(endY, startY + 1, imageHeight)
-  const stepX = Math.max(1, Math.floor((safeEndX - startX) / 5))
-  const stepY = Math.max(1, Math.floor((safeEndY - startY) / 5))
-  const buckets = new Map<string, Rgb[]>()
-
-  for (let y = startY; y < safeEndY; y += stepY) {
-    for (let x = startX; x < safeEndX; x += stepX) {
-      const index = (y * imageWidth + x) * 4
-      const sample = {
-        r: imageData[index],
-        g: imageData[index + 1],
-        b: imageData[index + 2],
-      }
-      const bucketKey = `${Math.round(sample.r / 24)}-${Math.round(sample.g / 24)}-${Math.round(sample.b / 24)}`
-      const bucket = buckets.get(bucketKey) ?? []
-      bucket.push(sample)
-      buckets.set(bucketKey, bucket)
-    }
-  }
-
-  if (buckets.size === 0) {
-    return averageBlock(imageData, imageWidth, imageHeight, startX, startY, endX, endY)
-  }
-
-  const dominantBucket = [...buckets.values()].sort((left, right) => right.length - left.length)[0]
-  return averageRgb(dominantBucket)
-}
-
 const applyGenerationStrategy = (color: Rgb, strategy: GenerationStrategy): Rgb => {
   const average = (color.r + color.g + color.b) / 3
 
@@ -269,25 +207,44 @@ const applyGenerationStrategy = (color: Rgb, strategy: GenerationStrategy): Rgb 
   return color
 }
 
-const rgbDistance = (left: Rgb, right: Rgb) => {
-  const dr = left.r - right.r
-  const dg = left.g - right.g
-  const db = left.b - right.b
-  return Math.sqrt(dr * dr + dg * dg + db * db)
+const preprocessColor = (color: Rgb, preset: PreprocessPreset): Rgb => {
+  const average = (color.r + color.g + color.b) / 3
+
+  if (preset === 'portrait') {
+    return {
+      r: clamp(Math.round(mixTowards(color.r + 6, average + 10, 0.08)), 0, 255),
+      g: clamp(Math.round(mixTowards(color.g + 2, average + 5, 0.12)), 0, 255),
+      b: clamp(Math.round(mixTowards(color.b - 4, average, 0.14)), 0, 255),
+    }
+  }
+
+  if (preset === 'landscape') {
+    return {
+      r: clamp(Math.round(color.r * 1.02), 0, 255),
+      g: clamp(Math.round(color.g * 1.06 + (color.g - average) * 0.08), 0, 255),
+      b: clamp(Math.round(color.b * 1.08 + (color.b - average) * 0.1), 0, 255),
+    }
+  }
+
+  return {
+    r: clamp(Math.round(color.r + (color.r - average) * 0.12), 0, 255),
+    g: clamp(Math.round(color.g + (color.g - average) * 0.12), 0, 255),
+    b: clamp(Math.round(color.b + (color.b - average) * 0.12), 0, 255),
+  }
 }
 
-const clusterColors = (colors: Rgb[], clusterCount: number) => {
+const clusterWeightedColors = (colors: WeightedColor[], clusterCount: number) => {
   const targetCount = Math.max(1, Math.min(clusterCount, colors.length))
   const step = Math.max(1, Math.floor(colors.length / targetCount))
-  let centroids = Array.from({ length: targetCount }, (_, index) => colors[Math.min(index * step, colors.length - 1)]).map(
+  let centroids = Array.from({ length: targetCount }, (_, index) => colors[Math.min(index * step, colors.length - 1)].color).map(
     (color) => ({ ...color }),
   )
 
   for (let iteration = 0; iteration < 6; iteration += 1) {
-    const groups = Array.from({ length: targetCount }, () => [] as Rgb[])
+    const groups = Array.from({ length: targetCount }, () => [] as WeightedColor[])
 
-    for (const color of colors) {
-      const colorLab = rgbToLab(color)
+    for (const entry of colors) {
+      const colorLab = rgbToLab(entry.color)
       let bestIndex = 0
       let bestDistance = Number.POSITIVE_INFINITY
 
@@ -299,13 +256,67 @@ const clusterColors = (colors: Rgb[], clusterCount: number) => {
         }
       })
 
-      groups[bestIndex].push(color)
+      groups[bestIndex].push(entry)
     }
 
-    centroids = groups.map((group, index) => (group.length ? averageRgb(group) : centroids[index]))
+    centroids = groups.map((group, index) => {
+      if (!group.length) {
+        return centroids[index]
+      }
+
+      const totalWeight = group.reduce((sum, item) => sum + item.weight, 0)
+      const weighted = group.reduce(
+        (sum, item) => ({
+          r: sum.r + item.color.r * item.weight,
+          g: sum.g + item.color.g * item.weight,
+          b: sum.b + item.color.b * item.weight,
+        }),
+        { r: 0, g: 0, b: 0 },
+      )
+
+      return {
+        r: Math.round(weighted.r / totalWeight),
+        g: Math.round(weighted.g / totalWeight),
+        b: Math.round(weighted.b / totalWeight),
+      }
+    })
   }
 
   return centroids
+}
+
+const buildColorHistogram = (colors: Rgb[]) => {
+  const histogram = new Map<string, WeightedColor>()
+
+  for (const color of colors) {
+    const key = `${Math.round(color.r / 10)}-${Math.round(color.g / 10)}-${Math.round(color.b / 10)}`
+    const existing = histogram.get(key)
+    if (existing) {
+      existing.weight += 1
+      existing.color = {
+        r: Math.round((existing.color.r * (existing.weight - 1) + color.r) / existing.weight),
+        g: Math.round((existing.color.g * (existing.weight - 1) + color.g) / existing.weight),
+        b: Math.round((existing.color.b * (existing.weight - 1) + color.b) / existing.weight),
+      }
+    } else {
+      histogram.set(key, { color: { ...color }, weight: 1 })
+    }
+  }
+
+  return [...histogram.values()].sort((left, right) => right.weight - left.weight)
+}
+
+const paletteLabCache = new Map<string, Lab>()
+
+const getPaletteLab = (color: PaletteColor) => {
+  const cached = paletteLabCache.get(color.id)
+  if (cached) {
+    return cached
+  }
+
+  const lab = rgbToLab(hexToRgb(color.hex))
+  paletteLabCache.set(color.id, lab)
+  return lab
 }
 
 const findNearestPaletteColor = (target: Rgb, palette: PaletteColor[]) => {
@@ -314,7 +325,7 @@ const findNearestPaletteColor = (target: Rgb, palette: PaletteColor[]) => {
   const targetLab = rgbToLab(target)
 
   for (const color of palette) {
-    const distance = ciede2000(targetLab, rgbToLab(hexToRgb(color.hex)))
+    const distance = ciede2000(targetLab, getPaletteLab(color))
     if (distance < minDistance) {
       minDistance = distance
       winner = color
@@ -324,34 +335,30 @@ const findNearestPaletteColor = (target: Rgb, palette: PaletteColor[]) => {
   return winner
 }
 
-const mergeColors = (colors: Rgb[], sensitivity: number) => {
-  const merged: Rgb[] = []
-  const threshold = 8 + sensitivity * 1.4
+const pickPaletteSubset = (colors: Rgb[], palette: PaletteColor[], colorLimit: number) => {
+  const histogram = buildColorHistogram(colors)
+  const centroids = clusterWeightedColors(
+    histogram,
+    Math.min(colorLimit, Math.max(1, Math.round(colorLimit * 1.35))),
+  )
 
-  for (const color of colors) {
-    const existing = merged.find((item) => rgbDistance(item, color) <= threshold)
-    if (existing) {
-      existing.r = Math.round((existing.r + color.r) / 2)
-      existing.g = Math.round((existing.g + color.g) / 2)
-      existing.b = Math.round((existing.b + color.b) / 2)
-    } else {
-      merged.push({ ...color })
+  const selected = new Map<string, PaletteColor>()
+
+  centroids.forEach((centroid) => {
+    const nearest = findNearestPaletteColor(centroid, palette)
+    selected.set(nearest.id, nearest)
+  })
+
+  for (const entry of histogram) {
+    if (selected.size >= colorLimit) {
+      break
     }
+
+    const nearest = findNearestPaletteColor(entry.color, palette)
+    selected.set(nearest.id, nearest)
   }
 
-  return merged
-}
-
-const pickPaletteSubset = (colors: Rgb[], colorLimit: number) => {
-  const ranked = [...beadPalette]
-    .map((paletteColor) => {
-      const paletteLab = rgbToLab(hexToRgb(paletteColor.hex))
-      const score = colors.reduce((sum, item) => sum + ciede2000(rgbToLab(item), paletteLab), 0)
-      return { paletteColor, score }
-    })
-    .sort((left, right) => left.score - right.score)
-
-  return ranked.slice(0, colorLimit).map((item) => item.paletteColor)
+  return [...selected.values()].slice(0, colorLimit)
 }
 
 const smoothIsolatedCells = (cells: Cell[]) => {
@@ -385,6 +392,228 @@ const smoothIsolatedCells = (cells: Cell[]) => {
 
     return replacement ? { ...cell, color: replacement.color } : cell
   })
+}
+
+const buildGridFromImage = (
+  image: HTMLImageElement,
+  cols: number,
+  rows: number,
+  sourceMode: SourceMode,
+  strategy: GenerationStrategy,
+  preprocessPreset: PreprocessPreset,
+) => {
+  const sampleCanvas = document.createElement('canvas')
+  sampleCanvas.width = cols
+  sampleCanvas.height = rows
+  const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true })
+
+  if (!sampleContext) {
+    throw new Error('无法创建采样画布')
+  }
+
+  sampleContext.clearRect(0, 0, cols, rows)
+  sampleContext.imageSmoothingEnabled = sourceMode !== 'pattern'
+  sampleContext.imageSmoothingQuality = sourceMode === 'pattern' ? 'low' : 'high'
+  sampleContext.drawImage(image, 0, 0, cols, rows)
+  const data = sampleContext.getImageData(0, 0, cols, rows).data
+  const cells: Rgb[] = []
+
+  for (let index = 0; index < data.length; index += 4) {
+    const sampled = {
+      r: data[index],
+      g: data[index + 1],
+      b: data[index + 2],
+    }
+    const preprocessed = sourceMode === 'pattern' ? sampled : preprocessColor(sampled, preprocessPreset)
+    cells.push(sourceMode === 'pattern' ? preprocessed : applyGenerationStrategy(preprocessed, strategy))
+  }
+
+  return cells
+}
+
+const analyzeImageRecommendation = (image: HTMLImageElement): Recommendation => {
+  const sampleWidth = 48
+  const sampleHeight = Math.max(24, Math.round((image.height / image.width) * sampleWidth))
+  const canvas = document.createElement('canvas')
+  canvas.width = sampleWidth
+  canvas.height = sampleHeight
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+
+  if (!context) {
+    return {
+      preprocessPreset: 'portrait',
+      generationStrategy: 'accurate',
+      ditherStrength: 72,
+      gridSize: 48,
+      colorLimit: 18,
+      summary: '推荐了通用参数。',
+    }
+  }
+
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(image, 0, 0, sampleWidth, sampleHeight)
+  const data = context.getImageData(0, 0, sampleWidth, sampleHeight).data
+
+  let totalSaturation = 0
+  let totalLuma = 0
+  let skinLike = 0
+  let edgeEnergy = 0
+  const bucketSet = new Set<string>()
+
+  const getPixel = (x: number, y: number): Rgb => {
+    const index = (y * sampleWidth + x) * 4
+    return { r: data[index], g: data[index + 1], b: data[index + 2] }
+  }
+
+  for (let y = 0; y < sampleHeight; y += 1) {
+    for (let x = 0; x < sampleWidth; x += 1) {
+      const pixel = getPixel(x, y)
+      const max = Math.max(pixel.r, pixel.g, pixel.b)
+      const min = Math.min(pixel.r, pixel.g, pixel.b)
+      const saturation = max === 0 ? 0 : (max - min) / max
+      const luma = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b
+
+      totalSaturation += saturation
+      totalLuma += luma
+      bucketSet.add(`${Math.round(pixel.r / 32)}-${Math.round(pixel.g / 32)}-${Math.round(pixel.b / 32)}`)
+
+      if (pixel.r > 95 && pixel.g > 40 && pixel.b > 20 && pixel.r > pixel.g && pixel.g > pixel.b) {
+        skinLike += 1
+      }
+
+      if (x < sampleWidth - 1 && y < sampleHeight - 1) {
+        const right = getPixel(x + 1, y)
+        const bottom = getPixel(x, y + 1)
+        edgeEnergy +=
+          Math.abs(pixel.r - right.r) + Math.abs(pixel.g - right.g) + Math.abs(pixel.b - right.b)
+        edgeEnergy +=
+          Math.abs(pixel.r - bottom.r) + Math.abs(pixel.g - bottom.g) + Math.abs(pixel.b - bottom.b)
+      }
+    }
+  }
+
+  const pixelCount = sampleWidth * sampleHeight
+  const avgSaturation = totalSaturation / pixelCount
+  const avgLuma = totalLuma / pixelCount
+  const detailScore = edgeEnergy / pixelCount
+  const paletteSpread = bucketSet.size
+  const skinRatio = skinLike / pixelCount
+  const aspectRatio = image.height / image.width
+
+  const preprocessPreset: PreprocessPreset =
+    skinRatio > 0.18 ? 'portrait' : avgSaturation > 0.48 ? 'illustration' : 'landscape'
+
+  const generationStrategy: GenerationStrategy =
+    avgSaturation > 0.5 && detailScore < 90
+      ? 'craft'
+      : detailScore > 170 || paletteSpread > 26
+        ? 'accurate'
+        : 'reduced'
+
+  const ditherStrength = clamp(
+    Math.round(
+      generationStrategy === 'accurate'
+        ? 78 + Math.min(12, detailScore / 35) + (avgLuma < 96 ? 4 : 0)
+        : generationStrategy === 'craft'
+          ? 42 + avgSaturation * 24
+          : 18 + detailScore / 18 - (avgLuma > 180 ? 4 : 0),
+    ),
+    0,
+    100,
+  )
+
+  const gridSize = clamp(
+    Math.round(
+      aspectRatio > 1.25
+        ? 44 + detailScore / 22
+        : aspectRatio < 0.8
+          ? 40 + detailScore / 24
+          : 48 + detailScore / 20,
+    ),
+    28,
+    72,
+  )
+
+  const colorLimit = clamp(
+    Math.round(
+      generationStrategy === 'reduced'
+        ? 12 + paletteSpread / 3
+        : generationStrategy === 'craft'
+          ? 16 + paletteSpread / 2.8
+          : 18 + paletteSpread / 2.2,
+    ),
+    8,
+    36,
+  )
+
+  const presetLabel =
+    preprocessPreset === 'portrait' ? '人像' : preprocessPreset === 'landscape' ? '风景' : '插画'
+  const strategyLabel =
+    generationStrategy === 'accurate'
+      ? '最接近原图'
+      : generationStrategy === 'reduced'
+        ? '更少颜色'
+        : '更适合拼豆'
+
+  return {
+    preprocessPreset,
+    generationStrategy,
+    ditherStrength,
+    gridSize,
+    colorLimit,
+    summary: `推荐 ${presetLabel} + ${strategyLabel}，抖动 ${ditherStrength}，色数 ${colorLimit}。`,
+  }
+}
+
+const applyErrorDiffusion = (
+  colors: Rgb[],
+  cols: number,
+  rows: number,
+  palette: PaletteColor[],
+  strength: number,
+) => {
+  const working = colors.map((color) => ({ ...color }))
+  const mapped: PaletteColor[] = Array.from({ length: colors.length })
+
+  const diffuse = (index: number, error: Rgb, factor: number) => {
+    if (index < 0 || index >= working.length) {
+      return
+    }
+
+    working[index] = {
+      r: clamp(Math.round(working[index].r + error.r * factor * strength), 0, 255),
+      g: clamp(Math.round(working[index].g + error.g * factor * strength), 0, 255),
+      b: clamp(Math.round(working[index].b + error.b * factor * strength), 0, 255),
+    }
+  }
+
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const index = y * cols + x
+      const adjusted = working[index]
+      const nearest = findNearestPaletteColor(adjusted, palette)
+      mapped[index] = nearest
+
+      const nearestRgb = hexToRgb(nearest.hex)
+      const error = subtractRgb(adjusted, nearestRgb)
+
+      if (x + 1 < cols) {
+        diffuse(index + 1, error, 7 / 16)
+      }
+      if (y + 1 < rows) {
+        if (x > 0) {
+          diffuse(index + cols - 1, error, 3 / 16)
+        }
+        diffuse(index + cols, error, 5 / 16)
+        if (x + 1 < cols) {
+          diffuse(index + cols + 1, error, 1 / 16)
+        }
+      }
+    }
+  }
+
+  return mapped
 }
 
 const drawPatternCanvas = (
@@ -475,6 +704,24 @@ const loadImage = (url: string) =>
     image.src = url
   })
 
+const blobUrlToDataUrl = async (blobUrl: string) => {
+  const response = await fetch(blobUrl)
+  const blob = await response.blob()
+
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+      } else {
+        reject(new Error('图片读取失败'))
+      }
+    }
+    reader.onerror = () => reject(new Error('图片读取失败'))
+    reader.readAsDataURL(blob)
+  })
+}
+
 const buildLegendFromCells = (cells: Cell[]) => {
   const counts = new Map<string, number>()
   cells.forEach((cell) => {
@@ -511,6 +758,8 @@ function App() {
   const uploadInputId = 'source-image-upload'
   const [sourceMode, setSourceMode] = useState<SourceMode>('photo')
   const [generationStrategy, setGenerationStrategy] = useState<GenerationStrategy>('accurate')
+  const [preprocessPreset, setPreprocessPreset] = useState<PreprocessPreset>('portrait')
+  const [ditherStrength, setDitherStrength] = useState(72)
   const [gridSize, setGridSize] = useState(48)
   const [colorLimit, setColorLimit] = useState(18)
   const [mergeSensitivity, setMergeSensitivity] = useState(26)
@@ -520,7 +769,10 @@ function App() {
   const [activeColorIds, setActiveColorIds] = useState<string[]>(beadPalette.map((item) => item.id))
   const [zoom, setZoom] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isRecommending, setIsRecommending] = useState(false)
+  const [isAiRecommending, setIsAiRecommending] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [recommendationSummary, setRecommendationSummary] = useState('')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [paletteGroup, setPaletteGroup] = useState<'all' | string>('all')
   const [isDragging, setIsDragging] = useState(false)
@@ -723,11 +975,88 @@ function App() {
     }
 
     setErrorMessage('')
+    setRecommendationSummary('')
     setSourceFileName(file.name)
     setPattern(null)
     setHighlightColorId(null)
     setSelectedCellKey(null)
     setSourceImage(URL.createObjectURL(file))
+  }
+
+  const handleRecommendParams = async () => {
+    if (!sourceImage) {
+      setErrorMessage('请先上传图片。')
+      return
+    }
+
+    setIsRecommending(true)
+    setErrorMessage('')
+
+    try {
+      const image = await loadImage(sourceImage)
+      const recommendation = analyzeImageRecommendation(image)
+
+      startTransition(() => {
+        setPreprocessPreset(recommendation.preprocessPreset)
+        setGenerationStrategy(recommendation.generationStrategy)
+        setDitherStrength(recommendation.ditherStrength)
+        setGridSize(recommendation.gridSize)
+        setColorLimit(recommendation.colorLimit)
+        setShowAdvanced(true)
+        setRecommendationSummary(recommendation.summary)
+      })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '推荐参数失败，请稍后重试。')
+    } finally {
+      setIsRecommending(false)
+    }
+  }
+
+  const handleAiRecommendParams = async () => {
+    if (!sourceImage) {
+      setErrorMessage('请先上传图片。')
+      return
+    }
+
+    setIsAiRecommending(true)
+    setErrorMessage('')
+
+    try {
+      const imageDataUrl = await blobUrlToDataUrl(sourceImage)
+      const response = await fetch('/api/ai-recommend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageDataUrl,
+          filename: sourceFileName,
+          localRecommendation: recommendationSummary || undefined,
+        }),
+      })
+
+      const result = (await response.json()) as RecommendationApiResult | { error?: string }
+
+      if (!response.ok) {
+        throw new Error('error' in result && result.error ? result.error : 'AI 推荐失败。')
+      }
+
+      const recommendation = result as RecommendationApiResult
+
+      startTransition(() => {
+        setPreprocessPreset(recommendation.preprocessPreset)
+        setGenerationStrategy(recommendation.generationStrategy)
+        setDitherStrength(recommendation.ditherStrength)
+        setGridSize(recommendation.gridSize)
+        setColorLimit(recommendation.colorLimit)
+        setShowAdvanced(true)
+        setRecommendationSummary(recommendation.summary)
+      })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'AI 推荐失败，请稍后重试。')
+    } finally {
+      setIsAiRecommending(false)
+    }
   }
 
   const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -949,79 +1278,48 @@ function App() {
       const aspectRatio = image.height / image.width
       const cols = gridSize
       const rows = Math.max(1, Math.round(gridSize * aspectRatio))
+      const sampledGrid = buildGridFromImage(
+        image,
+        cols,
+        rows,
+        sourceMode,
+        generationStrategy,
+        preprocessPreset,
+      )
 
-      const workingCanvas = document.createElement('canvas')
-      workingCanvas.width = image.width
-      workingCanvas.height = image.height
-      const workingContext = workingCanvas.getContext('2d', { willReadFrequently: true })
+      const paletteTargetSize = Math.min(
+        colorLimit,
+        generationStrategy === 'reduced'
+          ? Math.max(4, Math.round(colorLimit * 0.82))
+          : generationStrategy === 'craft'
+            ? Math.max(4, Math.round(colorLimit * 0.9))
+            : colorLimit,
+        enabledPalette.length,
+      )
 
-      if (!workingContext) {
-        throw new Error('无法读取图片像素')
-      }
-
-      workingContext.drawImage(image, 0, 0)
-      const raw = workingContext.getImageData(0, 0, image.width, image.height).data
-      const blockColors: Rgb[] = []
-
-      for (let row = 0; row < rows; row += 1) {
-        for (let col = 0; col < cols; col += 1) {
-          const startX = Math.floor((col / cols) * image.width)
-          const startY = Math.floor((row / rows) * image.height)
-          const endX = Math.floor(((col + 1) / cols) * image.width)
-          const endY = Math.floor(((row + 1) / rows) * image.height)
-
-          const sampled = dominantBlockColor(raw, image.width, image.height, startX, startY, endX, endY)
-          blockColors.push(
-            sourceMode === 'pattern'
-              ? sampled
-              : applyGenerationStrategy(sampled, generationStrategy),
-          )
-        }
-      }
-
-      const strategySensitivity =
-        generationStrategy === 'accurate'
-          ? Math.max(0, mergeSensitivity - 10)
-          : generationStrategy === 'reduced'
-            ? mergeSensitivity + 8
-            : mergeSensitivity + 14
-
-      const mergedColors =
-        sourceMode === 'pattern'
-          ? blockColors
-          : mergeColors(blockColors, strategySensitivity)
-      const clusteredColors =
-        sourceMode === 'pattern'
-          ? mergedColors
-          : clusterColors(
-              mergedColors,
-              Math.min(
-                generationStrategy === 'reduced'
-                  ? Math.max(4, Math.round(colorLimit * 0.72))
-                  : generationStrategy === 'craft'
-                    ? Math.max(4, Math.round(colorLimit * 0.85))
-                    : colorLimit,
-                enabledPalette.length,
-              ),
-            )
-      const subset = pickPaletteSubset(clusteredColors, Math.min(colorLimit, enabledPalette.length))
-      const workingPalette =
+      const paletteToUse =
         sourceMode === 'pattern'
           ? enabledPalette
-          : enabledPalette.filter((item) => subset.some((subsetColor) => subsetColor.id === item.id))
+          : pickPaletteSubset(sampledGrid, enabledPalette, paletteTargetSize)
 
-      const paletteToUse = workingPalette.length > 0 ? workingPalette : enabledPalette
-      const counts = new Map<string, number>()
+      const mappedPaletteColors =
+        sourceMode === 'pattern'
+          ? sampledGrid.map((color) => findNearestPaletteColor(color, paletteToUse))
+          : generationStrategy === 'reduced'
+            ? sampledGrid.map((color) => findNearestPaletteColor(color, paletteToUse))
+            : applyErrorDiffusion(
+                sampledGrid,
+                cols,
+                rows,
+                paletteToUse,
+                (ditherStrength / 100) * (generationStrategy === 'accurate' ? 0.88 : 0.42),
+              )
 
-      const cells = blockColors.map((color, index) => {
-        const mappedColor = findNearestPaletteColor(color, paletteToUse)
-        counts.set(mappedColor.id, (counts.get(mappedColor.id) ?? 0) + 1)
-        return {
-          x: index % cols,
-          y: Math.floor(index / cols),
-          color: mappedColor,
-        }
-      })
+      const cells = mappedPaletteColors.map((mappedColor, index) => ({
+        x: index % cols,
+        y: Math.floor(index / cols),
+        color: mappedColor,
+      }))
 
       const normalizedCells = generationStrategy === 'craft' ? smoothIsolatedCells(cells) : cells
 
@@ -1036,9 +1334,7 @@ function App() {
         { cellSize: 18, showCodes: false, includeLegend: false },
       )
 
-      const legend = [...counts.entries()]
-        .map(([id, count]) => ({ color: beadPalette.find((item) => item.id === id)!, count }))
-        .sort((left, right) => right.count - left.count)
+      const legend = buildLegendFromCells(normalizedCells)
 
       startTransition(() => {
         setHighlightColorId(null)
@@ -1169,7 +1465,29 @@ function App() {
             </div>
           ) : null}
 
-          <div className="flow-note">建议先用“平衡”模式生成一版，再根据效果切换“鲜艳”或“柔和”。</div>
+          <div className="flow-note">先选图片类型，再调抖动强度。抖动更高更接近原图，抖动更低画面会更干净。</div>
+
+          <div className="recommend-row">
+            <div className="recommend-actions">
+              <button
+                className="secondary-button"
+                onClick={handleRecommendParams}
+                disabled={!sourceImage || isRecommending}
+              >
+                {isRecommending ? '分析中...' : '一键推荐参数'}
+              </button>
+              <button
+                className="primary-button"
+                onClick={handleAiRecommendParams}
+                disabled={!sourceImage || isAiRecommending}
+              >
+                {isAiRecommending ? 'AI 分析中...' : 'AI 推荐参数'}
+              </button>
+            </div>
+            <small>AI 推荐需要服务端配置 `OPENAI_API_KEY`，会比本地规则更细。</small>
+          </div>
+
+          {recommendationSummary ? <div className="recommend-note">{recommendationSummary}</div> : null}
 
           <div className="control-grid">
             <label>
@@ -1206,6 +1524,26 @@ function App() {
             <div className="advanced-panel">
               <div className="processing-modes">
                 <button
+                  className={preprocessPreset === 'portrait' ? 'chip active' : 'chip'}
+                  onClick={() => setPreprocessPreset('portrait')}
+                >
+                  人像
+                </button>
+                <button
+                  className={preprocessPreset === 'landscape' ? 'chip active' : 'chip'}
+                  onClick={() => setPreprocessPreset('landscape')}
+                >
+                  风景
+                </button>
+                <button
+                  className={preprocessPreset === 'illustration' ? 'chip active' : 'chip'}
+                  onClick={() => setPreprocessPreset('illustration')}
+                >
+                  插画
+                </button>
+              </div>
+              <div className="processing-modes">
+                <button
                   className={generationStrategy === 'accurate' ? 'chip active' : 'chip'}
                   onClick={() => setGenerationStrategy('accurate')}
                 >
@@ -1225,6 +1563,16 @@ function App() {
                 </button>
               </div>
               <div className="control-grid">
+                <label>
+                  <span>抖动强度: {ditherStrength}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={ditherStrength}
+                    onChange={(event) => setDitherStrength(Number(event.target.value))}
+                  />
+                </label>
                 <label>
                   <span>合并敏感度: {mergeSensitivity}</span>
                   <input
@@ -1365,7 +1713,9 @@ function App() {
           <div className="workbench-toolbar">
             <span>{editMode === 'inspect' ? '查看模式' : editMode === 'paint' ? '涂改模式' : '框选模式'}</span>
             <span>MARD 221</span>
+            <span>{preprocessPreset === 'portrait' ? '人像预处理' : preprocessPreset === 'landscape' ? '风景预处理' : '插画预处理'}</span>
             <span>{generationStrategy === 'accurate' ? '最接近原图' : generationStrategy === 'reduced' ? '更少颜色' : '更适合拼豆'}</span>
+            <span>抖动 {ditherStrength}</span>
             <span>{pattern?.legend.length ?? 0} 色</span>
             <span>{Math.round(zoom * 100)}%</span>
             <span>自动保存</span>

@@ -300,6 +300,35 @@
   font-size: 0.9rem;
 }
 
+.recommend-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.recommend-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recommend-row small {
+  color: var(--muted);
+}
+
+.recommend-note {
+  margin: 0 0 14px;
+  padding: 11px 12px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 191, 125, 0.3);
+  background: rgba(255, 250, 242, 0.92);
+  color: #7a4d1c;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .processing-modes {
   display: flex;
   flex-wrap: wrap;
@@ -1010,6 +1039,15 @@
   .compare-note,
   .replace-panel {
     grid-template-columns: 1fr;
+  }
+
+  .recommend-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recommend-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .preview-panel {
