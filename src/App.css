@@ -219,6 +219,40 @@
   font-size: 0.9rem;
 }
 
+.upload-preview-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 10px;
+  border-radius: 16px;
+  background: #f7f9fd;
+  border: 1px solid #e8edf6;
+}
+
+.upload-preview-card img {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid #e9eef8;
+}
+
+.upload-preview-card strong {
+  display: block;
+  color: #21314f;
+  font-size: 0.92rem;
+}
+
+.upload-preview-card small {
+  display: block;
+  margin-top: 4px;
+  color: #728097;
+  word-break: break-all;
+}
+
 .control-grid {
   display: grid;
   gap: 14px;

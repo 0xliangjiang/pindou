@@ -206,6 +206,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState('')
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const previewSectionRef = useRef<HTMLDivElement | null>(null)
 
   const enabledPalette = useMemo(() => {
     const selected = beadPalette.filter((item) => activeColorIds.includes(item.id))
@@ -243,6 +244,27 @@ function App() {
       }
     }
   }, [sourceImage])
+
+  useEffect(() => {
+    if (!sourceImage || typeof window === 'undefined' || window.innerWidth > 820) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      const uploadPreview = document.getElementById('upload-preview-card')
+      uploadPreview?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+  }, [sourceImage])
+
+  useEffect(() => {
+    if (!pattern || typeof window === 'undefined' || window.innerWidth > 820) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      previewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [pattern])
 
   const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -445,6 +467,16 @@ function App() {
             <small>{sourceFileName}</small>
           </label>
 
+          {sourceImage ? (
+            <div className="upload-preview-card" id="upload-preview-card">
+              <img src={sourceImage} alt="已上传图片预览" />
+              <div>
+                <strong>已上传图片</strong>
+                <small>{sourceFileName}</small>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flow-note">手机端建议先上传图片，再微调参数，确认预览后直接导出图纸。</div>
 
           <div className="control-grid">
@@ -508,7 +540,7 @@ function App() {
           </div>
         </div>
 
-        <div className="panel preview-panel workspace-main">
+        <div className="panel preview-panel workspace-main" ref={previewSectionRef}>
           <div className="panel-top">
             <h2>预览图</h2>
             <div className="preview-actions">
