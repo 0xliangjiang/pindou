@@ -189,18 +189,20 @@ const applyGenerationStrategy = (color: Rgb, strategy: GenerationStrategy): Rgb 
   const average = (color.r + color.g + color.b) / 3
 
   if (strategy === 'reduced') {
+    // 轻微减少饱和度，保留更多细节
     return {
-      r: clamp(Math.round(color.r * 0.97 + average * 0.03), 0, 255),
-      g: clamp(Math.round(color.g * 0.97 + average * 0.03), 0, 255),
-      b: clamp(Math.round(color.b * 0.97 + average * 0.03), 0, 255),
+      r: clamp(Math.round(color.r * 0.985 + average * 0.015), 0, 255),
+      g: clamp(Math.round(color.g * 0.985 + average * 0.015), 0, 255),
+      b: clamp(Math.round(color.b * 0.985 + average * 0.015), 0, 255),
     }
   }
 
   if (strategy === 'craft') {
+    // 适度增强对比度，但不要过度
     return {
-      r: clamp(Math.round(color.r + (color.r - average) * 0.12 + 4), 0, 255),
-      g: clamp(Math.round(color.g + (color.g - average) * 0.12 + 4), 0, 255),
-      b: clamp(Math.round(color.b + (color.b - average) * 0.12 + 4), 0, 255),
+      r: clamp(Math.round(color.r + (color.r - average) * 0.06 + 2), 0, 255),
+      g: clamp(Math.round(color.g + (color.g - average) * 0.06 + 2), 0, 255),
+      b: clamp(Math.round(color.b + (color.b - average) * 0.06 + 2), 0, 255),
     }
   }
 
@@ -211,25 +213,28 @@ const preprocessColor = (color: Rgb, preset: PreprocessPreset): Rgb => {
   const average = (color.r + color.g + color.b) / 3
 
   if (preset === 'portrait') {
+    // 人像：轻微提亮肤色，保留细节
     return {
-      r: clamp(Math.round(mixTowards(color.r + 6, average + 10, 0.08)), 0, 255),
-      g: clamp(Math.round(mixTowards(color.g + 2, average + 5, 0.12)), 0, 255),
-      b: clamp(Math.round(mixTowards(color.b - 4, average, 0.14)), 0, 255),
+      r: clamp(Math.round(mixTowards(color.r + 3, average + 5, 0.04)), 0, 255),
+      g: clamp(Math.round(mixTowards(color.g + 1, average + 2, 0.06)), 0, 255),
+      b: clamp(Math.round(mixTowards(color.b - 2, average, 0.07)), 0, 255),
     }
   }
 
   if (preset === 'landscape') {
+    // 风景：轻微增强蓝绿色，保留细节
     return {
-      r: clamp(Math.round(color.r * 1.02), 0, 255),
-      g: clamp(Math.round(color.g * 1.06 + (color.g - average) * 0.08), 0, 255),
-      b: clamp(Math.round(color.b * 1.08 + (color.b - average) * 0.1), 0, 255),
+      r: clamp(Math.round(color.r * 1.01), 0, 255),
+      g: clamp(Math.round(color.g * 1.03 + (color.g - average) * 0.04), 0, 255),
+      b: clamp(Math.round(color.b * 1.04 + (color.b - average) * 0.05), 0, 255),
     }
   }
 
+  // 插画：轻微增强对比度，保留细节
   return {
-    r: clamp(Math.round(color.r + (color.r - average) * 0.12), 0, 255),
-    g: clamp(Math.round(color.g + (color.g - average) * 0.12), 0, 255),
-    b: clamp(Math.round(color.b + (color.b - average) * 0.12), 0, 255),
+    r: clamp(Math.round(color.r + (color.r - average) * 0.06), 0, 255),
+    g: clamp(Math.round(color.g + (color.g - average) * 0.06), 0, 255),
+    b: clamp(Math.round(color.b + (color.b - average) * 0.06), 0, 255),
   }
 }
 
@@ -372,6 +377,7 @@ const smoothIsolatedCells = (cells: Cell[]) => {
       lookup.get(`${cell.x}-${cell.y + 1}`),
     ].filter(Boolean) as Cell[]
 
+    // 需要至少3个邻居才进行平滑
     if (neighbors.length < 3) {
       return cell
     }
@@ -384,7 +390,8 @@ const smoothIsolatedCells = (cells: Cell[]) => {
     const [dominantColorId, count] =
       Object.entries(dominantNeighbor).sort((left, right) => right[1] - left[1])[0] ?? []
 
-    if (!dominantColorId || dominantColorId === cell.color.id || count < 3) {
+    // 提高阈值：需要4个相同颜色的邻居才平滑
+    if (!dominantColorId || dominantColorId === cell.color.id || count < 4) {
       return cell
     }
 
@@ -869,7 +876,7 @@ function App() {
 
     renderToCanvas(boardCanvasRef.current, boardCellSize, false)
     renderToCanvas(previewCanvasRef.current, Math.max(12, Math.floor(26 * zoom)), true)
-  }, [pattern, zoom, highlightColorId, selectedCellKey])
+  }, [pattern, zoom, highlightColorId, selectedCellKey, isPreviewOpen])
 
   useEffect(() => {
     return () => {
@@ -1312,7 +1319,7 @@ function App() {
                 cols,
                 rows,
                 paletteToUse,
-                (ditherStrength / 100) * (generationStrategy === 'accurate' ? 0.88 : 0.42),
+                (ditherStrength / 100) * (generationStrategy === 'accurate' ? 1.0 : 0.75),
               )
 
       const cells = mappedPaletteColors.map((mappedColor, index) => ({
@@ -1484,7 +1491,6 @@ function App() {
                 {isAiRecommending ? 'AI 分析中...' : 'AI 推荐参数'}
               </button>
             </div>
-            <small>AI 推荐需要服务端配置 `OPENAI_API_KEY`，会比本地规则更细。</small>
           </div>
 
           {recommendationSummary ? <div className="recommend-note">{recommendationSummary}</div> : null}

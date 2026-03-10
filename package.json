@@ -7,14 +7,27 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bridge:minimax": "tsx backend/minimax-mcp-bridge.ts",
+    "local:start": "./scripts/dev-stack.sh start",
+    "local:stop": "./scripts/dev-stack.sh stop",
+    "local:restart": "./scripts/dev-stack.sh restart",
+    "local:status": "./scripts/dev-stack.sh status",
+    "local:logs": "./scripts/dev-stack.sh logs"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tsx": "^4.21.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
