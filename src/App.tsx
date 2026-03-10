@@ -385,9 +385,7 @@ function App() {
         <div className="hero-copy">
           <span className="eyebrow">拼豆图案生成器</span>
           <h1>上传图片，生成拼豆图案</h1>
-          <p>
-            参考目标站点重建的在线拼豆工具。支持普通图片转拼豆图纸、已有图纸保留原色修改、颜色选择、预览、放大与导出。
-          </p>
+          <p>上传图片后自动生成拼豆配色、网格图纸和颜色统计，支持预览放大、导出和自定义颜色范围。</p>
           <div className="hero-actions">
             <button className="primary-button" onClick={handleGenerate} disabled={isGenerating || !sourceImage}>
               {isGenerating ? '生成中...' : '生成拼豆图案'}
@@ -479,7 +477,7 @@ function App() {
       </section>
 
       <section className="workspace">
-        <div className="panel">
+        <div className="panel workspace-sidebar">
           <div className="panel-top">
             <h2>颜色选择</h2>
             <span>自定义</span>
@@ -502,7 +500,7 @@ function App() {
           </div>
         </div>
 
-        <div className="panel preview-panel">
+        <div className="panel preview-panel workspace-main">
           <div className="panel-top">
             <h2>预览图</h2>
             <div className="preview-actions">
@@ -530,7 +528,7 @@ function App() {
           </div>
         </div>
 
-        <div className="panel">
+        <div className="panel workspace-aside">
           <div className="panel-top">
             <h2>颜色图例</h2>
             <button className="primary-button" onClick={downloadPattern} disabled={!pattern}>
