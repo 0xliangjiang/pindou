@@ -62,6 +62,7 @@
 }
 
 .hero-actions,
+.hero-steps,
 .mode-switch,
 .preview-actions,
 .lightbox-toolbar {
@@ -72,6 +73,19 @@
 
 .hero-actions {
   margin-top: 20px;
+}
+
+.hero-steps {
+  margin-top: 16px;
+}
+
+.hero-steps span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f4f6fb;
+  color: #526179;
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .hero-stats {
@@ -193,6 +207,16 @@
   font-size: 1.05rem;
   font-weight: 700;
   color: #173158;
+}
+
+.flow-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f7f9fd;
+  border: 1px solid #e8edf6;
+  color: #607088;
+  font-size: 0.9rem;
 }
 
 .control-grid {
@@ -472,6 +496,10 @@
   font-size: 0.92rem;
 }
 
+.mobile-action-bar {
+  display: none;
+}
+
 @media (max-width: 1180px) {
   .hero,
   .workspace,
@@ -489,6 +517,7 @@
   .app-shell {
     width: min(100vw - 20px, 1360px);
     padding-top: 12px;
+    padding-bottom: 104px;
   }
 
   .hero-copy,
@@ -506,6 +535,71 @@
   .community-cards {
     grid-template-columns: 1fr 1fr;
   }
+
+  .hero {
+    gap: 14px;
+  }
+
+  .hero-copy {
+    order: 1;
+  }
+
+  .hero-card {
+    order: 0;
+  }
+
+  .workspace-sidebar {
+    order: 1;
+  }
+
+  .workspace-main {
+    order: 0;
+  }
+
+  .workspace-aside {
+    order: 2;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .image-card:first-child {
+    order: 1;
+  }
+
+  .image-card:last-child {
+    order: 0;
+  }
+
+  .mode-switch,
+  .hero-actions {
+    display: none;
+  }
+
+  .mobile-action-bar {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 9;
+    display: grid;
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(184, 197, 223, 0.7);
+    box-shadow: 0 18px 34px rgba(16, 24, 40, 0.16);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-upload-button,
+  .mobile-generate-button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 560px) {
@@ -519,5 +613,26 @@
   .panel-top {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .hero-copy h1 {
+    font-size: 2rem;
+  }
+
+  .hero-steps {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hero-stats {
+    gap: 8px;
+  }
+
+  .hero-stats div {
+    padding: 12px;
+  }
+
+  .mobile-action-bar {
+    grid-template-columns: 1fr 1.2fr;
   }
 }

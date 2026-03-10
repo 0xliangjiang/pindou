@@ -192,6 +192,7 @@ const loadImage = (url: string) =>
   })
 
 function App() {
+  const uploadInputId = 'source-image-upload'
   const [sourceMode, setSourceMode] = useState<SourceMode>('photo')
   const [gridSize, setGridSize] = useState(48)
   const [colorLimit, setColorLimit] = useState(18)
@@ -386,6 +387,11 @@ function App() {
           <span className="eyebrow">拼豆图案生成器</span>
           <h1>上传图片，生成拼豆图案</h1>
           <p>上传图片后自动生成拼豆配色、网格图纸和颜色统计，支持预览放大、导出和自定义颜色范围。</p>
+          <div className="hero-steps">
+            <span>1 上传图片</span>
+            <span>2 调整网格和颜色</span>
+            <span>3 导出图纸</span>
+          </div>
           <div className="hero-actions">
             <button className="primary-button" onClick={handleGenerate} disabled={isGenerating || !sourceImage}>
               {isGenerating ? '生成中...' : '生成拼豆图案'}
@@ -434,10 +440,12 @@ function App() {
           </div>
 
           <label className="upload-panel">
-            <input type="file" accept="image/*" onChange={handleUpload} />
+            <input id={uploadInputId} type="file" accept="image/*" onChange={handleUpload} />
             <span>上传图片</span>
             <small>{sourceFileName}</small>
           </label>
+
+          <div className="flow-note">手机端建议先上传图片，再微调参数，确认预览后直接导出图纸。</div>
 
           <div className="control-grid">
             <label>
@@ -575,6 +583,15 @@ function App() {
           ))}
         </div>
       </section>
+
+      <div className="mobile-action-bar">
+        <label className="secondary-button mobile-upload-button" htmlFor={uploadInputId}>
+          {sourceImage ? '更换图片' : '上传图片'}
+        </label>
+        <button className="primary-button mobile-generate-button" onClick={handleGenerate} disabled={isGenerating || !sourceImage}>
+          {isGenerating ? '生成中...' : '生成图案'}
+        </button>
+      </div>
 
       {isPreviewOpen && pattern ? (
         <div className="lightbox" onClick={() => setIsPreviewOpen(false)}>
