@@ -1012,6 +1012,22 @@
     grid-template-columns: 1fr;
   }
 
+  .preview-panel {
+    min-height: 0;
+  }
+
+  .workbench-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-right: -4px;
+  }
+
+  .workbench-toolbar span,
+  .toolbar-clear {
+    flex: 0 0 auto;
+  }
+
   .inspector-panel {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -1023,10 +1039,36 @@
 
   .image-card:first-child {
     order: 1;
+    min-height: 0;
   }
 
   .image-card:last-child {
     order: 0;
+  }
+
+  .image-card {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .image-card:first-child img {
+    min-height: 0;
+    max-height: 180px;
+  }
+
+  .compare-note {
+    display: none;
+  }
+
+  .canvas-panel {
+    overflow-x: hidden;
+    padding: 10px;
+  }
+
+  .canvas-panel canvas {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
   }
 
   .mode-switch,
@@ -1096,6 +1138,25 @@
   .hero-stats div,
   .palette-summary {
     padding: 12px;
+  }
+
+  .hero-copy,
+  .hero-card,
+  .panel {
+    border-width: 2px;
+  }
+
+  .workbench-toolbar {
+    gap: 6px;
+  }
+
+  .workbench-toolbar span,
+  .toolbar-clear {
+    font-size: 0.78rem;
+  }
+
+  .inspector-panel {
+    padding: 10px 12px;
   }
 
   .mobile-action-bar {

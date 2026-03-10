@@ -1043,6 +1043,7 @@ function App() {
       startTransition(() => {
         setHighlightColorId(null)
         setSelectedCellKey(null)
+        setZoom(typeof window !== 'undefined' && window.innerWidth <= 820 ? 0.78 : 1)
         setCurrentPaintColorId(legend[0]?.color.id ?? null)
         setReplaceState({
           fromId: legend[0]?.color.id ?? '',
