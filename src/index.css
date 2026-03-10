@@ -1,21 +1,33 @@
 :root {
   font-family:
-    'SF Pro Display',
+    'Nunito',
     'PingFang SC',
     'Noto Sans SC',
-    'Segoe UI',
     sans-serif;
   line-height: 1.5;
-  font-weight: 400;
-  color: #111827;
+  font-weight: 500;
+  color: #24324a;
   background:
-    radial-gradient(circle at top left, rgba(78, 117, 255, 0.18), transparent 22%),
-    radial-gradient(circle at top right, rgba(85, 197, 255, 0.12), transparent 20%),
-    linear-gradient(180deg, #eef4ff 0%, #f7f9fc 40%, #edf2fb 100%);
+    radial-gradient(circle at top left, rgba(255, 191, 125, 0.26), transparent 24%),
+    radial-gradient(circle at top right, rgba(118, 216, 255, 0.24), transparent 18%),
+    radial-gradient(circle at 20% 80%, rgba(255, 150, 190, 0.18), transparent 20%),
+    linear-gradient(180deg, #fff7e8 0%, #fefcff 42%, #eef8ff 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-strong: rgba(255, 255, 255, 0.98);
+  --outline: #24324a;
+  --outline-soft: rgba(36, 50, 74, 0.12);
+  --accent: #ff8b5e;
+  --accent-strong: #ff6f61;
+  --sky: #73d5ff;
+  --mint: #77dfb3;
+  --banana: #ffd86f;
+  --ink: #24324a;
+  --muted: #64748b;
+  --shadow-pop: 0 16px 0 rgba(36, 50, 74, 0.08), 0 26px 50px rgba(107, 124, 168, 0.18);
 }
 
 * {
@@ -30,7 +42,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  color: #111827;
+  color: var(--ink);
 }
 
 button,
@@ -38,6 +50,13 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
 }
 
 button {
